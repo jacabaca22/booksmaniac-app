@@ -18,18 +18,19 @@ function App() {
             const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=20`);
             if (!res.ok) throw new Error("API Error");
             const data = await res.json();
-            
+
             const mappedResults = (data.docs || []).map(doc => ({
                 id: doc.key,
                 volumeInfo: {
                     title: doc.title,
                     authors: doc.author_name,
+                    categories: doc.subject ? [doc.subject[0]] : null,
                     imageLinks: doc.cover_i ? {
                         thumbnail: `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
                     } : null
                 }
             }));
-            
+
             setResults(mappedResults);
         } catch (err) {
             setError('Błąd połączenia z API OpenLibrary lub przekroczono inny limit.');
@@ -39,8 +40,13 @@ function App() {
 
     const addToReading = (book) => {
         if (!readingList.find(b => b.id === book.id)) {
-            setReadingList([...readingList, book]);
+            setReadingList([...readingList, { ...book, currentPage: 1 }]);
         }
+    };
+
+    const updatePage = (bookId, pageString) => {
+        const page = parseInt(pageString, 10) || 0;
+        setReadingList(readingList.map(b => b.id === bookId ? { ...b, currentPage: page } : b));
     };
 
     const moveToFinished = (book) => {
@@ -98,12 +104,19 @@ function App() {
                                             alt={book.volumeInfo.title}
                                         />
                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                            <button
-                                                onClick={() => addToReading(book)}
-                                                className="bg-green-600 text-white font-bold py-2 px-4 rounded transform translate-y-4 group-hover:translate-y-0 transition-transform"
-                                            >
-                                                DODAJ DO LISTY
-                                            </button>
+                                            {readingList.some(b => b.id === book.id) ? (
+                                                <div className="bg-green-500 text-white font-bold py-2 px-4 rounded flex items-center gap-2 shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-transform">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                                                    DODANO
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => addToReading(book)}
+                                                    className="bg-green-600 text-white font-bold py-2 px-4 rounded transform translate-y-4 group-hover:translate-y-0 transition-transform hover:bg-green-500 shadow-xl"
+                                                >
+                                                    DODAJ DO LISTY
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                     <h3 className="mt-3 text-white font-semibold text-sm leading-tight line-clamp-2">{book.volumeInfo.title}</h3>
@@ -114,7 +127,51 @@ function App() {
                     </section>
                 )}
 
-                {/* Tutaj możesz dodać widoki dla 'reading' i 'finished' w podobnym stylu */}
+                {activeTab === 'reading' && (
+                    <section className="animate-in fade-in duration-700">
+                        <h2 className="text-4xl text-white font-serif mb-10 text-center">Aktualnie czytam</h2>
+                        {readingList.length === 0 ? (
+                            <p className="text-center text-[#678] font-medium text-lg mt-10">Brak książek na liście. Wyszukaj i dodaj pierwszą pozycję!</p>
+                        ) : (
+                            <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+                                {readingList.map(book => (
+                                    <div key={book.id} className="group flex bg-[#2c3440] p-4 rounded-xl items-center shadow-xl border border-[#3d4856] hover:border-green-500 transition-all duration-300">
+                                        <div className="w-24 shrink-0 aspect-[2/3] overflow-hidden rounded border border-black/40 bg-black/20">
+                                            <img
+                                                src={book.volumeInfo.imageLinks?.thumbnail?.replace('http:', 'https:') || 'https://placehold.co/300x450/445566/FFF?text=Brak+Okladki'}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                alt={book.volumeInfo.title}
+                                            />
+                                        </div>
+                                        <div className="flex-1 ml-6 flex flex-col justify-center">
+                                            <h3 className="text-2xl text-white font-bold leading-tight line-clamp-2">{book.volumeInfo.title}</h3>
+                                            <p className="text-sm mt-1 font-medium text-green-500 uppercase tracking-widest">{book.volumeInfo.authors?.[0] || 'Autor nieznany'}</p>
+                                            <div className="mt-3 flex flex-wrap items-center gap-4">
+                                                <span className="bg-[#445566] text-white text-xs px-3 py-1 rounded-full shadow-inner border border-[#567]">{book.volumeInfo.categories?.[0] || 'Gatunek niesklasyfikowany'}</span>
+                                                <div className="flex items-center gap-2 bg-[#1e242c] px-3 py-1 rounded shadow-inner border border-[#3d4856]">
+                                                    <span className="text-xs text-[#89a] font-bold uppercase tracking-wider">STRONA:</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="1000"
+                                                        value={book.currentPage || 1}
+                                                        onChange={(e) => updatePage(book.id, e.target.value)}
+                                                        className="w-16 bg-transparent text-green-400 font-bold text-center focus:outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => moveToFinished(book)} className="ml-4 shrink-0 bg-transparent border-2 border-green-600 text-green-500 hover:bg-green-600 hover:text-white font-bold px-6 py-2.5 rounded transition-colors active:scale-95">
+                                            ZAKOŃCZ
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
+
+                {/* Tutaj możesz dodać widok dla 'finished' w podobnym stylu */}
             </main>
         </div>
     );
